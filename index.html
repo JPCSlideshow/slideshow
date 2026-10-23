@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Jewellery slideshow</title>
+</head>
+<body style="margin:0;background:#F4F5F7">
+<div id="boot" style="font:20px/1.6 Arial,sans-serif;color:#5F6368;padding:30vh 6vw;text-align:center">Loading slideshow…</div>
+<script>
+/* Hosted page. Open .../slideshow/#queenswood, #craighall or #bronkies. */
+window.SLIDESHOW_BASE = "./";   // the store comes from the link, e.g. index.html#queenswood
+(function(){
+  var B = window.SLIDESHOW_BASE;
+  function say(t){ var b = document.getElementById("boot"); if (b) b.textContent = t; }
+  function useSaved(){                              // server unreachable: run the copy saved on this device
+    var code = null, v = null;
+    try { code = localStorage.getItem("jw_app_code"); v = localStorage.getItem("jw_app_version"); } catch(e){}
+    if (!code) { say("Couldn't reach the slideshow server. Check the internet connection, then reload."); return; }
+    window.SLIDESHOW_VERSION = v || "saved";
+    var s = document.createElement("script"); s.textContent = code + "\nwindow.JW_APP();"; document.body.appendChild(s);
+  }
+  function loadApp(v){
+    var s = document.createElement("script");
+    s.src = B + "app.js?v=" + encodeURIComponent(v);
+    s.onerror = useSaved;
+    document.body.appendChild(s);
+  }
+  var vs = document.createElement("script");
+  vs.src = B + "version.js?t=" + Date.now();          // always ask the server for the latest version
+  vs.onload = function(){ loadApp(window.SLIDESHOW_VERSION); };
+  vs.onerror = useSaved;
+  document.head.appendChild(vs);
+})();
+</script>
+</body>
+</html>
