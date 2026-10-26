@@ -10,7 +10,13 @@ const STORES = {
   queenswood:   { name: "Queenswood",      code: "qwd", slug: "cash-converters-queenswood" },
   craighall:    { name: "Craighall Park",  code: "chp", slug: "cash-converters-craighall-park" },
   bronkies:     { name: "Bronkhorstspruit", code: "bhs", slug: "cash-converters-bronkhorstspruit" },
-  carnival:     { name: "Carnival",         code: "mac", slug: "cash-converters-carnival" }
+  carnival:     { name: "Carnival",         code: "mac", slug: "cash-converters-carnival" },
+  threerivers:  { name: "Three Rivers",     code: "trv", slug: "cash-converters-three-rivers" },
+  balfour:      { name: "Balfour Mall",     code: "bfm", slug: "cash-converters-balfour-mall" },
+  claremont:    { name: "Claremont",        code: "clm", slug: "cash-converters-claremont" },
+  keywest:      { name: "Key West",         code: "key", slug: "cash-converters-key-west" },
+  montague:     { name: "Montague",         code: "mgd", slug: "cash-converters-montague" },
+  worcester:    { name: "Worcester",        code: "wor", slug: "cash-converters-worcester" }
 };
 
 const STORE_KEY = String(window.SLIDESHOW_STORE || location.hash.slice(1) || "").toLowerCase();
