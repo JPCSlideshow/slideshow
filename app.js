@@ -9,7 +9,8 @@ const BASE = window.SLIDESHOW_BASE || "./";
 const STORES = {
   queenswood:   { name: "Queenswood",      code: "qwd", slug: "cash-converters-queenswood" },
   craighall:    { name: "Craighall Park",  code: "chp", slug: "cash-converters-craighall-park" },
-  bronkies:     { name: "Bronkhorstspruit", code: "bhs", slug: "cash-converters-bronkhorstspruit" }
+  bronkies:     { name: "Bronkhorstspruit", code: "bhs", slug: "cash-converters-bronkhorstspruit" },
+  carnival:     { name: "Carnival",         code: "mac", slug: "cash-converters-carnival" }
 };
 
 const STORE_KEY = String(window.SLIDESHOW_STORE || location.hash.slice(1) || "").toLowerCase();
