@@ -63,6 +63,10 @@ const CONFIG = {
   jpcBadge: true,         // draw the Certified Refurbished badge on JPC pieces
   secondsPerSlide: 8,
   refreshMinutes: 30,
+  netTimeoutSeconds: 30,  // give up on one request after this long (slow connections)
+  netRetries: 3,          // tries per request before giving up
+  retryMinutes: 2,        // after a failed load, try again this soon instead of waiting for the next refresh
+  imageWaitSeconds: 20,   // how long to wait for a photo before moving on to one that has loaded
   updateCheckMinutes: 15, // how often to check the server for a new version of this slideshow
   cacheHours: 12,         // if the internet is down at start-up, use the last list only if it is this recent
   shuffle: true,
@@ -86,39 +90,77 @@ function status(msg, showLog){
   if (showLog) logEl.classList.add("show");
 }
 
-async function gql(query, variables){
-  const r = await fetch(CONFIG.apiUrl, {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({query, variables})
+const sleep = ms => new Promise(r=>setTimeout(r,ms));
+function withTimeout(promise, ms, ctl){
+  return new Promise((resolve,reject)=>{
+    const t = setTimeout(()=>{ try{ if (ctl) ctl.abort(); }catch(e){} reject(new Error("timed out (slow connection)")); }, ms);
+    promise.then(v=>{ clearTimeout(t); resolve(v); }, e=>{ clearTimeout(t); reject(e); });
   });
-  if (!r.ok) throw new Error(`HTTP ${r.status} ${r.statusText}`);
-  const j = await r.json();
-  if (j.errors && j.errors.length) throw new Error(j.errors.map(e=>e.message).join(" | "));
-  return j.data;
+}
+async function gql(query, variables){
+  let last;
+  for (let attempt = 1; attempt <= CONFIG.netRetries; attempt++){
+    try{
+      const ctl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+      const work = fetch(CONFIG.apiUrl, Object.assign({
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({query, variables})
+      }, ctl ? {signal: ctl.signal} : {})).then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status} ${r.statusText}`);
+        return r.json();
+      });
+      const j = await withTimeout(work, CONFIG.netTimeoutSeconds*1000, ctl);
+      if (j.errors && j.errors.length){
+        const e = new Error(j.errors.map(e=>e.message).join(" | ")); e.answered = true; throw e;
+      }
+      return j.data;
+    }catch(e){
+      last = e;
+      if (e.answered) throw e;               // the server replied with an error: retrying won't help
+      if (attempt < CONFIG.netRetries){
+        log(`Connection problem (${e.message}). Retrying ${attempt} of ${CONFIG.netRetries-1}…`);
+        await sleep(attempt * 5000);
+      }
+    }
+  }
+  last.network = true;
+  throw last;
 }
 
+async function tryChannel(c){
+  const d = await gql(`query($c:String!){products(first:1, channel:$c){totalCount}}`, {c});
+  return d.products.totalCount;
+}
 async function findChannel(){
   if (CONFIG.channel) return CONFIG.channel;
+  let saved = null;
+  try { saved = localStorage.getItem("jw_channel"); } catch(e){}
+  if (saved){                                   // fastest path: the channel that worked last time (one request)
+    try { if (await tryChannel(saved)) return saved; }
+    catch(e){ if (e.network) throw e; }
+  }
   const guesses = [];
-  try { const saved = localStorage.getItem("jw_channel"); if (saved) guesses.push(saved); } catch(e){}
   try{
     const d = await gql(`{channels{slug name isActive}}`);
     const listed = (d.channels||[]).map(c=>c.slug);
     log(`Channel list from the site: ${listed.join(", ") || "(empty)"}`);
     guesses.push(...listed);
-  }catch(e){ log(`Channel list not public (${e.message}). Trying known names instead.`); }
+  }catch(e){
+    if (e.network) throw e;                     // no connection: stop here instead of trying every name
+    log(`Channel list not public (${e.message}). Trying known names instead.`);
+  }
   guesses.push(...CONFIG.channelGuesses);
   const empty = [], missing = [];
   for (const c of [...new Set(guesses)]){
+    if (c === saved) continue;
     try{
-      const d = await gql(`query($c:String!){products(first:1, channel:$c){totalCount}}`, {c});
-      const n = d.products.totalCount;
+      const n = await tryChannel(c);
       if (!n){ empty.push(c); continue; }
       log(`Channel "${c}" works: ${n} products on the site.`);
       try { localStorage.setItem("jw_channel", c); } catch(e){}
       return c;
-    }catch(e){ missing.push(c); }
+    }catch(e){ if (e.network) throw e; missing.push(c); }
   }
   log(`Channels that exist but have no products: ${empty.join(", ") || "none"}`);
   log(`Channel names that don't exist: ${missing.join(", ")}`);
@@ -126,6 +168,13 @@ async function findChannel(){
 }
 
 async function findCategories(){
+  const key = "jw_cats_" + CONFIG.categorySlugs.join(",").length;   // remembered on the device: saves a request
+  try { const c = JSON.parse(localStorage.getItem(key)||"null"); if (c && c.length) return c; } catch(e){}
+  const ids = await findCategoriesOnline();
+  try { localStorage.setItem(key, JSON.stringify(ids)); } catch(e){}
+  return ids;
+}
+async function findCategoriesOnline(){
   const d = await gql(`query($s:[String!]){categories(first:100, filter:{slugs:$s}){edges{node{id slug name}}}}`,
                       {s: CONFIG.categorySlugs});
   const cats = d.categories.edges.map(e=>e.node);
@@ -134,6 +183,13 @@ async function findCategories(){
   return cats.map(c=>c.id);
 }
 
+// photo size to ask for: big enough for this screen, no bigger (saves data on slow connections)
+const IMG_SIZE = (function(){
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+  const landscape = innerWidth >= innerHeight;
+  const px = (landscape ? 0.78*innerHeight : 0.88*innerWidth) * dpr;
+  return px <= 300 ? 256 : px <= 600 ? 512 : 1024;
+})();
 const PRODUCT_Q = (useStock, useSearch) => `
 query($c:String!,$cats:[ID!],$after:String${useSearch?",$q:String":""}){
   products(first:100, after:$after, channel:$c,
@@ -143,13 +199,10 @@ query($c:String!,$cats:[ID!],$after:String${useSearch?",$q:String":""}){
     edges{node{
       name slug
       category{name}
-      description
-      collections{name slug}
-      productType{name slug}
-      attributes{attribute{slug name} values{name slug}}
+${CONFIG.show === "gold" ? "      description\n" : ""}      attributes{attribute{slug name} values{name slug}}
       variants{attributes{attribute{slug name} values{name slug}}}
       metadata{key value}
-      thumbnail(size:1024){url}
+      thumbnail(size:${IMG_SIZE}){url}
       pricing{onSale priceRange{start{gross{amount currency}}} priceRangeUndiscounted{start{gross{amount currency}}}}
     }}
   }
@@ -240,7 +293,13 @@ async function loadProducts(){
   if (!knownCats) knownCats = await findCategories();
   const channel = knownChannel, cats = knownCats;
   let items = [];
-  try { items = await scan(channel, cats, CONFIG.storeName); } catch(e){ log(`Search by store name failed: ${e.message}`); }
+  let skipSearch = false;
+  try { skipSearch = localStorage.getItem("jw_nosearch") === "1"; } catch(e){}
+  if (!skipSearch){                              // quick search by store name; remembered if it doesn't help
+    try { items = await scan(channel, cats, CONFIG.storeName); }
+    catch(e){ if (e.network) throw e; log(`Search by store name failed: ${e.message}`); }
+    if (!items.length){ try { localStorage.setItem("jw_nosearch","1"); } catch(e){} }
+  }
   if (!items.length) items = await scan(channel, cats, null);
   // de-duplicate by slug
   const seen = new Set();
@@ -276,31 +335,51 @@ function makeSlide(p){
     </div>`;
   return el;
 }
-function preload(p){ if (p) { const i = new Image(); i.src = p.thumbnail.url; } }
+const loadedPhotos = new Set();
+function preload(p){
+  return new Promise(resolve=>{
+    if (!p) return resolve(false);
+    const url = p.thumbnail.url;
+    if (loadedPhotos.has(url)) return resolve(true);
+    const i = new Image();
+    let done = false;
+    const finish = ok => { if (!done){ done = true; resolve(ok); } };
+    i.onload = () => { loadedPhotos.add(url); finish(true); };   // still counts if it arrives late
+    i.onerror = () => finish(false);
+    setTimeout(()=>finish(false), CONFIG.imageWaitSeconds*1000);
+    i.src = url;
+  });
+}
 
-let failStreak = 0;
+let failStreak = 0, showToken = 0;
 function clearStage(){ $("stage").innerHTML = ""; clearTimeout(timer); $("bar").style.width = "0"; }
 
-function show(){
+async function show(){
   if (!items.length) return;
   if (idx >= items.length) idx = 0;
+  const my = ++showToken;
   const p = items[idx];
+  const ok = await preload(p);
+  if (my !== showToken || !items.length) return;      // something newer took over while waiting
+  if (!ok){
+    failStreak++;
+    log(`Photo not loaded yet, skipping for now: ${p.name}`);
+    if (failStreak >= items.length){ failStreak = 0; next(30000); }   // nothing loaded: keep the current slide, try again in 30s
+    else next(0);
+    return;
+  }
+  failStreak = 0;
+  $("status").classList.add("hidden");
   const stage = $("stage");
   const el = makeSlide(p);
-  const img = el.querySelector("img");
-  img.onload = () => { failStreak = 0; };
-  img.onerror = () => {
-    log(`Image failed, skipping: ${p.name}`);
-    failStreak++;
-    next(failStreak >= items.length ? 30000 : 0);   // if every photo fails, wait 30s instead of spinning
-  };
   stage.appendChild(el);
   requestAnimationFrame(()=>requestAnimationFrame(()=>el.classList.add("on")));
   [...stage.children].slice(0,-1).forEach(old => { old.classList.remove("on"); setTimeout(()=>old.remove(), 1300); });
   const bar = $("bar");
   bar.style.transition = "none"; bar.style.width = "0";
   requestAnimationFrame(()=>{ bar.style.transition = `width ${CONFIG.secondsPerSlide}s linear`; bar.style.width = "100%"; });
-  preload(items[(idx+1) % items.length]);
+  preload(items[(idx+1) % items.length]);           // fetch the next two photos while this one shows
+  preload(items[(idx+2) % items.length]);
   next(CONFIG.secondsPerSlide*1000);
 }
 function next(ms){
@@ -328,7 +407,7 @@ function readCache(){
 function start(list){
   items = CONFIG.shuffle ? shuffle(list.slice()) : list.slice();
   idx = 0; failStreak = 0;
-  $("status").classList.add("hidden");
+  status("Loading photos…", false);
   clearStage(); show();
 }
 
@@ -352,7 +431,7 @@ function showEmpty(msg){
   status(msg, false);
 }
 
-let refreshing = false;
+let refreshing = false, retryTimer = null;
 async function refresh(first){
   if (refreshing) return;
   refreshing = true;
@@ -374,8 +453,12 @@ async function refresh(first){
     if (!items.length){
       const cached = readCache();
       if (cached && cached.length){ log(`Using ${cached.length} saved pieces from the last successful load.`); start(cached); }
+      else if (e.network) status(`Waiting for the internet connection… The slideshow will try again by itself in ${CONFIG.retryMinutes} minutes.`, false);
       else status("Couldn't load the jewellery list. Take a photo of the details below and send it to Corli.", true);
-    } else log("Keeping the current slideshow and trying again at the next refresh.");
+    } else log("Keeping the current slideshow.");
+    clearTimeout(retryTimer);
+    log(`Trying again in ${CONFIG.retryMinutes} minutes.`);
+    retryTimer = setTimeout(()=>refresh(false), CONFIG.retryMinutes*60*1000);
   } finally {
     refreshing = false;
   }
@@ -415,8 +498,11 @@ setInterval(()=>{
     s.remove();
     const latest = window.SLIDESHOW_VERSION;
     if (latest && latest !== APP_VERSION){
-      log(`New version ${latest} found on the server. Reloading…`);
-      setTimeout(()=>location.reload(), 1500);
+      log(`New version ${latest} found on the server. Downloading it first…`);
+      // only reload once the new version has actually downloaded, so a weak connection never leaves a blank screen
+      withTimeout(fetch(BASE + "app.js?v=" + encodeURIComponent(latest), {mode:"no-cors"}), 120000)
+        .then(()=>{ log("Downloaded. Reloading…"); setTimeout(()=>location.reload(), 1500); })
+        .catch(()=>log("Couldn't download the new version yet. Will try again at the next check."));
     }
   };
   s.onerror = () => { s.remove(); log("Couldn't reach the server to check for updates. Will try again later."); };

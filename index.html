@@ -8,8 +8,10 @@
 <body style="margin:0;background:#F4F5F7">
 <div id="boot" style="font:20px/1.6 Arial,sans-serif;color:#5F6368;padding:30vh 6vw;text-align:center">Loading slideshow…</div>
 <script>
-/* Hosted page. Open .../slideshow/#queenswood, #craighall or #bronkies. */
-window.SLIDESHOW_BASE = "./";   // the store comes from the link, e.g. index.html#queenswood
+/* Hosted page. Open .../slideshow/#queenswood, #craighall, #bronkies or #carnival. */
+window.SLIDESHOW_BASE = "./";
+// save the slideshow and photos on this device so it copes with bad internet
+if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(function(){});   // the store comes from the link, e.g. index.html#queenswood
 (function(){
   var B = window.SLIDESHOW_BASE;
   function say(t){ var b = document.getElementById("boot"); if (b) b.textContent = t; }
