@@ -1,6 +1,9 @@
 /* Cash Converters jewellery slideshow - shared app for all stores.
    After changing this file, ALWAYS change the version in version.js too, otherwise devices keep the old copy. */
 window.JW_APP = function(){
+/* support for older TV browsers */
+if (!Array.prototype.flatMap) Array.prototype.flatMap = function(f, t){ return [].concat.apply([], this.map(f, t)); };
+if (!Array.prototype.flat) Array.prototype.flat = function(){ return [].concat.apply([], this); };
 const APP_VERSION = window.SLIDESHOW_VERSION || "unknown";
 const BASE = window.SLIDESHOW_BASE || "./";
 
@@ -324,7 +327,8 @@ function isGold(p){
 }
 const jpcAttrRe = /jpc[\s_-]*verified/i;
 function isJpc(p){
-  const attrs = [...(p.attributes||[]), ...(p.variants||[]).flatMap(v=>v.attributes||[])];
+  const attrs = (p.attributes||[]).slice();
+  (p.variants||[]).forEach(v => (v.attributes||[]).forEach(a => attrs.push(a)));   // no flatMap: older TV browsers lack it
   const jpc = attrs.filter(a => jpcAttrRe.test(a.attribute.slug||"") || jpcAttrRe.test(a.attribute.name||""));
   if (jpc.length) return jpc.some(a => (a.values||[]).some(v =>
       /(^|:\s*)(yes|true)$/i.test((v.name||"").trim()) || /(^|_)true$/i.test(v.slug||"")));
