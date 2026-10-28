@@ -9,6 +9,10 @@
 <div id="boot" style="font:20px/1.6 Arial,sans-serif;color:#5F6368;padding:30vh 6vw;text-align:center">Loading slideshow…</div>
 <script>
 /* Hosted page. Open .../slideshow/#queenswood, #craighall, #bronkies or #carnival. */
+// stores that use the category menu: their usual link (#store) goes to their menu page instead
+var MENU_STORES = { threerivers: "threerivers.html" };
+var MENU_PAGE = MENU_STORES[String(location.hash.slice(1)).toLowerCase()];
+if (MENU_PAGE) location.replace(MENU_PAGE);
 window.SLIDESHOW_BASE = "./";
 // save the slideshow and photos on this device so it copes with bad internet
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(function(){});   // the store comes from the link, e.g. index.html#queenswood
@@ -32,7 +36,7 @@ if ("serviceWorker" in navigator && location.protocol === "https:") navigator.se
   vs.src = B + "version.js?t=" + Date.now();          // always ask the server for the latest version
   vs.onload = function(){ loadApp(window.SLIDESHOW_VERSION); };
   vs.onerror = useSaved;
-  document.head.appendChild(vs);
+  if (!MENU_PAGE) document.head.appendChild(vs);
 })();
 </script>
 </body>
