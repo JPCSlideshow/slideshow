@@ -7,7 +7,7 @@ const SHELL = "jw-shell-v2", PHOTOS = "jw-photos-v1", MAX_PHOTOS = 150;
 self.addEventListener("install", e => {
   self.skipWaiting();
   // save the start page straight away, so it's on the device even before the first reload
-  e.waitUntil(caches.open(SHELL).then(c => c.addAll(["./", "./version.js"])).catch(() => {}));
+  e.waitUntil(caches.open(SHELL).then(c => c.addAll(["./", "./version.js", "./stores.js"])).catch(() => {}));
 });
 self.addEventListener("activate", e => {
   e.waitUntil((async () => {
@@ -19,7 +19,7 @@ self.addEventListener("activate", e => {
 function keyFor(req){
   const u = new URL(req.url);
   if (req.mode === "navigate" || u.pathname.endsWith("/") || u.pathname.endsWith("/index.html")) return u.origin + u.pathname.replace(/index\.html$/, "");
-  if (u.pathname.endsWith("/version.js")) return u.origin + u.pathname;
+  if (u.pathname.endsWith("/version.js") || u.pathname.endsWith("/stores.js")) return u.origin + u.pathname;
   return req.url;                                   // app.js keeps its ?v= so each version is separate
 }
 
@@ -27,6 +27,7 @@ async function networkFirst(req){
   const cache = await caches.open(SHELL);
   const key = keyFor(req);
   const saved = await cache.match(key) || await cache.match(req, {ignoreSearch: true});
+  // pages and version files: always check GitHub for the newest copy (skip the browser's 10-minute cache)
   const net = fetch(req).then(async res => {
     if (res && res.ok && res.type === "basic"){
       if (new URL(req.url).pathname.endsWith("/app.js")){   // keep only the newest app.js

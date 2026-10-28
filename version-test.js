@@ -1,2 +1,2 @@
-// TEST version number. Change this every time you upload a new app-test.js.
-window.SLIDESHOW_VERSION = "test-2026-10-29.3";
+// TEST version number (no longer used: the test page now opens the shared slideshow).
+window.SLIDESHOW_VERSION = "test-retired-2026-10-29";
