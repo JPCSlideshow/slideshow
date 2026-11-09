@@ -12,6 +12,7 @@
 
 // true = every store gets the category menu (overrides the menu: false lines below)
 window.SLIDESHOW_MENU_FOR_ALL = false;
+window.SLIDESHOW_GOATCOUNTER = "jpcslideshow";
 
 window.SLIDESHOW_STORES = {
   aerocentre:         { name: "Aero Centre",          code: "AEC", menu: false },
