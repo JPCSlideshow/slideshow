@@ -1,2 +1,2 @@
 // Change this every time you upload a new app.js. Any new text works, e.g. today's date plus a number.
-window.SLIDESHOW_VERSION = "2026-11-09.1";
+window.SLIDESHOW_VERSION = "2026-11-09.2";
