@@ -114,6 +114,6 @@ window.SLIDESHOW_STORES = {
   wierdapark:         { name: "Wierda Park",          code: "WDP", menu: false },
   witbank:            { name: "Witbank",              code: "WBK", menu: false },
   woodmead:           { name: "Woodmead",             code: "WMD", menu: false },
-  worcester:          { name: "Worcester",            code: "WOR", menu: false },
+  worcester:          { name: "Worcester",            code: "WOR", menu: true },
   wynberg:            { name: "Wynberg",              code: "WBG", menu: false }
 };
