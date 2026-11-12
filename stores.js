@@ -108,7 +108,7 @@ window.SLIDESHOW_STORES = {
   vornavalley:        { name: "Vorna Valley",         code: "VNV", menu: false },
   walmerpark:         { name: "Walmer Park",          code: "SRS", menu: false },
   waterfallridge:     { name: "Waterfall Ridge",      code: "WFR", menu: false },
-  waterkloof:         { name: "Waterkloof",           code: "WKR", menu: false },
+  waterkloof:         { name: "Waterkloof",           code: "WKR", menu: true },
   welkom:             { name: "Welkom",               code: "WLK", menu: false },
   whiteriver:         { name: "White River",          code: "WHR", menu: false },
   wierdapark:         { name: "Wierda Park",          code: "WDP", menu: false },
